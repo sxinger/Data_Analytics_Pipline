@@ -30,9 +30,12 @@ for(file in gaitrite_files){
   gait %<>%
     bind_rows(read.xlsx(paste0("./data/",file),sheet = 1))
 }
-#normalize columnames
+#normalize column names
 unnorm_colnm<-colnames(gait)
 colnames(gait)<-normalize_name(unnorm_colnm)
+
+#normalize column names
+
 
 
 #====Grip Data
