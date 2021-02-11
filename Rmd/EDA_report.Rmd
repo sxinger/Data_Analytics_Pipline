@@ -1,6 +1,19 @@
-rm(list=ls())
-source("./R/util.R")
+---
+title: "Evaluate effectiveness of Intelligent Sensor System - EDA report"
+author: "Xing Song"
+date: "2/10/2021"
+output: html_document
+---
 
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      warning = FALSE,
+                      message = FALSE)
+```
+
+
+```{r load_lib}
+source("../R/util.R")
 #install specific packages
 require_libraries(c("tidyverse",
                     "magrittr",
@@ -9,19 +22,31 @@ require_libraries(c("tidyverse",
                     "lme4",
                     "lmerTest",
                     "kableExtra"
-                    ))
+                    ),
+                  verb=FALSE)
+```
 
-enroll<-readRDS("./data/preproc/enroll.rda") 
-walkspeed<-readRDS("./data/preproc/walkspeed.rda")
-gaitrite<-readRDS("./data/preproc/gaitrite.rda")
-grip<-readRDS("./data/preproc/grip.rda")
 
-#====Overview
+```{r load_data}
+enroll<-readRDS("../data/preproc/enroll.rda") 
+walkspeed<-readRDS("../data/preproc/walkspeed.rda")
+gaitrite<-readRDS("../data/preproc/gaitrite.rda")
+grip<-readRDS("../data/preproc/grip.rda")
+```
+
+
+```{r overview}
 pat_n<-length(unique(enroll$Research_ID))
 case_n<-length(unique(enroll$Research_ID[enroll$Summary_Type=="Linguistic"]))
 ctrl_n<-length(unique(enroll$Research_ID[enroll$Summary_Type=="Standard"]))
+```
 
-#====Table 1====
+Among all `r pat_n` enrolled subjects, `r case_n` are randomized to the "Linguistic" (shortened as "L") group and `r ctrl_n` were randomized to the "Standard" (shortened as "S") group. 
+
+
+### Table 1 - Basic Characteristic Comparison
+
+```{r tbl1}
 enroll %<>%
   left_join(walkspeed %>% group_by(Research_ID) %>%
               arrange(Date) %>% slice(1:1) %>%
@@ -60,14 +85,24 @@ tbl1 %>%
   kbl(caption="Table 1 - Demographic and Clinical Characteristic Comparison") %>%
   collapse_rows(columns = 5, valign = "top")
 
-#====Walking Speed - Overview
+```
+
+No significant differences were observed between the L and S group.  
+
+
+### Walking Speed (10ft)
+
+```{r ws_overview}
 ws_pat_n<-length(unique(walkspeed$Research_ID))
 ws2_pat_n<-length(unique(walkspeed$Research_ID[walkspeed$Repeat_Meas_n>1]))
 ws2_case_n<-length(unique(walkspeed$Research_ID[walkspeed$Repeat_Meas_n>1&walkspeed$Summary_Type=="Linguistic"]))
 ws2_ctrl_n<-length(unique(walkspeed$Research_ID[walkspeed$Repeat_Meas_n>1&walkspeed$Summary_Type=="Standard"]))
+```
+
+The 10-ft walking speed is measured every 6 months, 2 measurement were taken each time, and the average value is used for final analysis. `r ws_pat_n` subjects has at least some walking speed records, while only `r ws2_pat_n` had more than 2 repeated measures, `r ws2_case_n` from L group and `r ws2_ctrl_n` from S group.
 
 
-#====Walking Speed - Mixed Model ====
+```{r ws_lmm}
 ggplot(walkspeed %>%
          filter(Repeat_Meas_n > 1) %>%
          select(Research_ID,ws_10ft,Mth3_Since_Last,Summary_Type),
@@ -81,16 +116,23 @@ fit_ws<-lmer(ws_10ft ~ Mth3_Since_Last*Summary_Type+(1+Mth3_Since_Last|Research_
 summary(fit_ws)
 confint(fit_ws)
 anova(fit_ws)
+```
+
+No significant difference in walking speed change between the two comparison groups.
 
 
-#====Grip - Overview====
+### Grip Strength
+
+```{r grip_overview}
 grip_pat_n<-length(unique(grip$Research_ID))
 grip2_pat_n<-length(unique(grip$Research_ID[grip$Repeat_Meas_n>1]))
 grip2_case_n<-length(unique(grip$Research_ID[grip$Repeat_Meas_n>1&grip$Summary_Type=="Linguistic"]))
 grip2_ctrl_n<-length(unique(grip$Research_ID[grip$Repeat_Meas_n>1&grip$Summary_Type=="Standard"]))
+```
 
+The grip strength was measured every 3 months, 2 measurements were taken each time, and the average value is used for final analysis. `r grip_pat_n` subjects has at least some walking speed records, while only `r grip2_pat_n` had more than 2 repeated measures over time, `r grip2_case_n` from L group and `r grip2_ctrl_n` from S group.
 
-#====Grip - Mixed Model====
+```{r grip_plot}
 ggplot(grip %>%
          filter(Repeat_Meas_n > 1) %>%
          select(Research_ID,grip_right,grip_left,Mth3_Since_Last) %>%
@@ -102,22 +144,31 @@ ggplot(grip %>%
   geom_smooth(aes(group=Research_ID),method="lm",
               formula = 'y~x',se=FALSE,linetype=1) +
   facet_wrap(~grip_side,ncol=2,scales="free")
+```
 
+**Left Grip**
+```{r gripl_lmm}
 fit_gripl<-lmer(grip_left ~ Mth3_Since_Last*Summary_Type+(1|Research_ID),
                 data=grip %>% filter(Repeat_Meas_n > 1))
 summary(fit_gripl)
 anova(fit_gripl)
 confint(fit_gripl)
+```
 
-
+**Right Grip**
+```{r gripr_lmm}
 fit_gripr<-lmer(grip_right ~ Mth3_Since_Last*Summary_Type+(1|Research_ID),
                 data=grip %>% filter(Repeat_Meas_n > 1))
 summary(fit_gripr)
 anova(fit_gripr)
 confint(fit_gripr)
 
+```
 
-#====GaitRite - Overview====
+
+### GaitRite Measurement
+
+```{r gait_overview}
 gaitrite %<>%
   mutate(var_idx=dense_rank(var))
 
@@ -126,8 +177,12 @@ gait_pat_n<-length(unique(gaitrite$Research_ID))
 gait2_pat_n<-length(unique(gaitrite$Research_ID[gaitrite$Repeat_Meas_n>1]))
 gait2_case_n<-length(unique(gaitrite$Research_ID[gaitrite$Repeat_Meas_n>1&gaitrite$Summary_Type=="Linguistic"]))
 gait2_ctrl_n<-length(unique(gaitrite$Research_ID[gaitrite$Repeat_Meas_n>1&gaitrite$Summary_Type=="Standard"]))
+```
 
-#====GaitRite - Mixed Model====
+GaitRite metrics were collected every 6 months with `r gait_p` different metrics reported. `r gait_pat_n` subjects has at least some walking speed records, while only `r gait2_pat_n` had more than 2 repeated measures over time, `r gait2_case_n` from L group and `r gait2_ctrl_n` from S group.
+
+
+```{r gait_discovery}
 test_df<-c()
 sig_plot<-list()
 for(i in seq_len(gait_p)){
@@ -184,6 +239,14 @@ test_df2show %>%
   kbl(caption="Table 2 - GLMM-Model-based screening results of GaitRite metrics") %>%
   collapse_rows(columns = 1, valign = "top")
 
+gait_p_sel<-length(sig_plot)
+```
 
+I performed mixed-model-based screening over all the `r gait_p` gaitrite variables, and presented the results in Table 2. `r gait_p_sel` has showed some significance (p-value <= 0.1) in either overall difference of metrics or change of the metrics over time. 
 
-
+```{r gait_plot}
+sig_nm<-names(sig_plot)
+for(nm in sig_nm){
+  print(sig_plot[[nm]])
+}
+```

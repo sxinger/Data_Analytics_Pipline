@@ -27,12 +27,19 @@ height<-read.xlsx("./data/Height_AmulatoryStatus_20Mar.xlsx",sheet = 1) %>%
 
 #====Enrollment+Height====
 enroll %<>%
-  left_join(height,by="Research.ID")
+  left_join(height,by="Research.ID") 
 
 #normalize column names
 unnorm_colnm<-colnames(enroll)
 colnames(enroll)<-normalize_name(unnorm_colnm)
 
+#====Prelim Data clean and engineer====
+enroll %<>%
+  #simple rule-base imputation
+  mutate(Censored=as.numeric(!is.na(Withdrawn))) %>%
+  replace_na(list(Withdrawn=as.Date('2021-01-29'))) %>%
+  #add "intervention dose"
+  mutate(Enroll_Days=as.numeric(round(Withdrawn-Enrolled)))
 
 #====GaitRITE Data====
 gaitrite_files<-list.files("./data",pattern="^Gait")
@@ -63,9 +70,14 @@ gait %<>%
   group_by(Research_ID,Last_Name,First_Name,Sex,HT,Summary_Type,Wheelchair,Walking,Assistive_Device,
            Enrolled,Withdrawn,var) %>%
   arrange(var,Date_Time_of_Test) %>%
-  mutate(Day_Since_Last=as.numeric(round(Date_Time_of_Test-dplyr::lag(Date_Time_of_Test,n=1)))) %>%
+  mutate(Day_Since_Last=as.numeric(round(Date_Time_of_Test-dplyr::lag(Date_Time_of_Test,n=1))),
+         Repeat_Meas_n=length(unique(Day_Since_Last))) %>%
   ungroup %>% replace_na(list(Day_Since_Last=0)) %>%
-  mutate(Day_Since_Enroll=as.numeric(round(Date_Time_of_Test-Enrolled)))
+  mutate(Day_Since_Enroll=as.numeric(round(Date_Time_of_Test-Enrolled))) %>%
+  mutate(Summary_Type=relevel(as.factor(Summary_Type),ref="Standard"),
+         Mth6_Since_Last=floor(Day_Since_Last/180),
+         Mth3_Since_Last=floor(Day_Since_Last/90),
+         Mth_Since_Last=floor(Day_Since_Last/30))
 
 
 #====Walk Speed====
@@ -80,8 +92,15 @@ walkspeed<-read.xlsx("./data/walkingspeed_20Nov.xlsx",sheet=1,startRow = 1) %>%
   mutate(Date=as.Date(date_convert(as.numeric(Date)),origin="1970-01-01"),
          ws_10ft=(ws_10ft_trial1+pmax(ws_10ft_trial2,0,na.rm = T))/(2-is.na(ws_10ft_trial2))) %>%
   group_by(Research_ID) %>% arrange(Date) %>%
-  mutate(Day_Since_Last=as.numeric(round(Date-dplyr::lag(Date,n=1)))) %>%
-  ungroup %>% replace_na(list(Day_Since_Last=0))
+  mutate(Day_Since_Last=as.numeric(round(Date-dplyr::lag(Date,n=1))),
+         Repeat_Meas_n=length(unique(Day_Since_Last))) %>%
+  ungroup %>% replace_na(list(Day_Since_Last=0)) %>%
+  inner_join(enroll %>% select(Research_ID,Summary_Type),
+             by="Research_ID") %>%
+  mutate(Summary_Type=relevel(as.factor(Summary_Type),ref="Standard"),
+         Mth6_Since_Last=floor(Day_Since_Last/180),
+         Mth3_Since_Last=floor(Day_Since_Last/90),
+         Mth_Since_Last=floor(Day_Since_Last/30))
 
   
 
@@ -99,8 +118,15 @@ grip<-read.xlsx("./data/Grip_20Nov.xlsx",sheet=1,startRow = 2) %>%
          grip_right=(as.numeric(grip_right1)+pmax(as.numeric(grip_right2),0,na.rm = T))/(2-is.na(as.numeric(grip_right2))),
          grip_left=(as.numeric(grip_left1)+pmax(as.numeric(grip_left2),0,na.rm = T))/(2-is.na(as.numeric(grip_left2)))) %>%
   group_by(Research_ID) %>% arrange(Date) %>%
-  mutate(Day_Since_Last=as.numeric(round(Date-dplyr::lag(Date,n=1)))) %>%
-  ungroup %>% replace_na(list(Day_Since_Last=0))
+  mutate(Day_Since_Last=as.numeric(round(Date-dplyr::lag(Date,n=1))),
+         Repeat_Meas_n=length(unique(Day_Since_Last))) %>%
+  ungroup %>% replace_na(list(Day_Since_Last=0)) %>%
+  inner_join(enroll %>% select(Research_ID,Summary_Type),
+             by="Research_ID") %>%
+  mutate(Summary_Type=relevel(as.factor(Summary_Type),ref="Standard"),
+         Mth6_Since_Last=floor(Day_Since_Last/180),
+         Mth3_Since_Last=floor(Day_Since_Last/90),
+         Mth_Since_Last=floor(Day_Since_Last/30))
 
 
 
