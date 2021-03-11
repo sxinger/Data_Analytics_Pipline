@@ -92,6 +92,9 @@ tbl1 %>%
 No significant differences were observed between the L and S group.  
 
 
+***************************************************************************************************************
+
+
 ### Walking Speed (10ft)
 
 ```{r ws_overview}
@@ -192,6 +195,10 @@ anova(fit_ws)
 ```
 
 
+
+***************************************************************************************************************
+
+
 ### Grip Strength
 
 ```{r grip_overview}
@@ -263,11 +270,14 @@ ggplot(grip_summ, aes(x = estimate, y = 1)) +
   labs(x="Grip Strength change per Month", 
        y="density")
 ```
+
+**Right Grip**
+
 ```{r}
-grip_summ_r<-grip_summ %>% filter()
-tbl3<-univar_analysis_mixed(id=grip_summ$Research_ID,
-                            grp=grip_summ$summ_grip,
-                            X=walkspeed_summ[,c("estimate","change_dir")],
+grip_summ_r<-grip_summ %>% filter(grip_side=="grip_right")
+tbl3<-univar_analysis_mixed(id=grip_summ_r$Research_ID,
+                            grp=grip_summ_r$Summary_Type,
+                            X=grip_summ_r[,c("estimate","change_dir")],
                             data_type=c("num","cat"),
                             pretty=T,
                             digit=3)
@@ -277,39 +287,20 @@ tbl3 %>%
   collapse_rows(columns = c(1,5), valign = "top") %>%
   kable_material(c("striped","hover"))
 
-
-
 ```
 
-
-**Right Grip**
-
-```{r}
-#
-table(grip_summ$change_dir,
-      grip_summ$Summary_Type)
-
-prop.table(table(walkspeed_summ$change_dir,
-           walkspeed_summ$Summary_Type),margin=2)
-
-chisq.test(walkspeed_summ$Summary_Type,
-           walkspeed_summ$change_dir)
-
-```
-
-
-```{r gripr_lmm}
-fit_gripr<-lmer(grip_right ~ Mth3_Since_Last*Summary_Type+(1|Research_ID),
+```{r gripr_lmm, eval=F}
+fit_gripr<-lmer(grip_right ~ Mth_Since_Last*Summary_Type+(1|Research_ID),
                 data=grip %>% filter(Repeat_Meas_n > 1))
 summary(fit_gripr)
 anova(fit_gripr)
 confint(fit_gripr)
-
 ```
 
 
 **Left Grip**
-```{r gripl_lmm}
+
+```{r gripl_lmm, eval=F}
 fit_gripl<-lmer(grip_left ~ Mth3_Since_Last*Summary_Type+(1|Research_ID),
                 data=grip %>% filter(Repeat_Meas_n > 1))
 summary(fit_gripl)
@@ -317,21 +308,28 @@ anova(fit_gripl)
 confint(fit_gripl)
 ```
 
+
 ```{r}
-#
-table(walkspeed_summ$change_dir,
-           walkspeed_summ$Summary_Type)
+grip_summ_l<-grip_summ %>% filter(grip_side=="grip_left")
+tbl4<-univar_analysis_mixed(id=grip_summ_l$Research_ID,
+                            grp=grip_summ_l$Summary_Type,
+                            X=grip_summ_l[,c("estimate","change_dir")],
+                            data_type=c("num","cat"),
+                            pretty=T,
+                            digit=3)
 
-prop.table(table(walkspeed_summ$change_dir,
-           walkspeed_summ$Summary_Type),margin=2)
-
-chisq.test(walkspeed_summ$Summary_Type,
-           walkspeed_summ$change_dir)
+tbl4 %>%
+  kbl(caption="Table 4 - Left Grip Change per Month") %>%
+  collapse_rows(columns = c(1,5), valign = "top") %>%
+  kable_material(c("striped","hover"))
 
 ```
 
+The "No change", "Increase", and "Decrease" groups are defined the similar way as above. By comparing the personalized rate of change for grip strength, we observed that **there right grip strength reduced with a rate that is significantly slower than the standard group**. 
 
 
+
+***************************************************************************************************************
 
 
 ### GaitRite Measurement
