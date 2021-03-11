@@ -4,7 +4,8 @@ source("./R/util.R")
 #install specific packages
 require_libraries(c("tidyverse",
                     "magrittr",
-                    "openxlsx"))
+                    "openxlsx",
+                    "readxl"))
 
 #load data
 #====Enrollment Data====
@@ -25,9 +26,16 @@ height<-read.xlsx("./data/Height_AmulatoryStatus_20Mar.xlsx",sheet = 1) %>%
   select(Research.ID,HT,Wheelchair,Walking,Assistive_Device) %>%
   filter(!is.na(HT))
 
-#====Enrollment+Height====
 enroll %<>%
   left_join(height,by="Research.ID") 
+
+#===Add DOB===========
+#direct load from OneDrive (after sync)
+birth_date<-read_xlsx("C:\\Users\\xsm7f\\University of Missouri\\Marchal, Noah - NLM R01 Enrollment\\NLM R01 Participants_3.2021.xlsx") %>%
+  select(`Research ID`,`DOB`)
+
+enroll %<>%
+  left_join(birth_date,by=c("Research.ID"="Research ID")) 
 
 #normalize column names
 unnorm_colnm<-colnames(enroll)
@@ -39,7 +47,9 @@ enroll %<>%
   mutate(Censored=as.numeric(!is.na(Withdrawn))) %>%
   replace_na(list(Withdrawn=as.Date('2021-01-29'))) %>%
   #add "intervention dose"
-  mutate(Enroll_Days=as.numeric(round(Withdrawn-Enrolled)))
+  mutate(Enroll_Days=as.numeric(round(Withdrawn-Enrolled))) %>%
+  #add "age at enrollment"
+  mutate(Age_at_Enr=as.numeric(round((Enrolled-as.Date(DOB,format="%Y-%m-%d"))/365.25)))
 
 #====GaitRITE Data====
 gaitrite_files<-list.files("./data",pattern="^Gait")
@@ -127,7 +137,6 @@ grip<-read.xlsx("./data/Grip_20Nov.xlsx",sheet=1,startRow = 2) %>%
          Mth6_Since_Last=floor(Day_Since_Last/180),
          Mth3_Since_Last=floor(Day_Since_Last/90),
          Mth_Since_Last=floor(Day_Since_Last/30))
-
 
 
 

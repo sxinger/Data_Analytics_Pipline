@@ -8,7 +8,8 @@ require_libraries(c("tidyverse",
                     "Hmisc",
                     "lme4",
                     "lmerTest",
-                    "kableExtra"
+                    "kableExtra",
+                    "readxl"
                     ))
 
 enroll<-readRDS("./data/preproc/enroll.rda") 
@@ -40,6 +41,7 @@ enroll %<>%
 var_tbl1<-tibble(var_nm=as.character(),
                  var_type=as.character())
 var_tbl1 %<>% 
+  add_row(var_nm="Age_at_Enr",var_type="num") %>%
   add_row(var_nm="Sex",var_type="cat") %>%
   add_row(var_nm="HT",var_type="num") %>%
   add_row(var_nm="Wheelchair",var_type="cat") %>%
@@ -59,6 +61,7 @@ tbl1<-univar_analysis_mixed(id=enroll$Research_ID,
 tbl1 %>%
   kbl(caption="Table 1 - Demographic and Clinical Characteristic Comparison") %>%
   collapse_rows(columns = 5, valign = "top")
+
 
 #====Walking Speed - Overview
 ws_pat_n<-length(unique(walkspeed$Research_ID))

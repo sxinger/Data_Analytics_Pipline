@@ -34,7 +34,7 @@ normalize_name<-function(x){
 }
 
 ##https://github.com/sxinger/utils/blob/master/data_analysis_util.R
-univar_analysis_mixed<-function(id,grp,X,data_type,pretty=F){
+univar_analysis_mixed<-function(id,grp,X,data_type,pretty=F, digit=1){
   if(ncol(X)!=length(data_type)){
     stop("data types of X need to be specified")
   }
@@ -106,11 +106,11 @@ univar_analysis_mixed<-function(id,grp,X,data_type,pretty=F){
       mutate(val=as.character(val)) %>% 
       spread(grp,val) %>%
       bind_rows(out_num %>%
-                  mutate(label2=paste0(round(val_mean,1)," (",round(val_sd,1),")"," [",round(val_miss/n,2),"]")) %>%
+                  mutate(label2=paste0(round(val_mean,digit)," (",round(val_sd,digit+1),")"," [",round(val_miss/n,digit+1),"]")) %>%
                   dplyr::select(var,grp,p.value,label2) %>% spread(grp,label2)) %>%
       bind_rows(out_cat %>%
                   unite("var",c("var","val"),sep="=") %>%
-                  mutate(label2=paste0(n," (",round(prop*100,1),"%)"," [",round(val_miss/n,2),"]")) %>%
+                  mutate(label2=paste0(n," (",round(prop*100,digit),"%)"," [",round(val_miss/n,digit+1),"]")) %>%
                   dplyr::select(var,grp,p.value,label2) %>% spread(grp,label2)) %>%
       mutate(p.value=round(p.value,4)) %>%
       separate("var",c("var","cat"),sep="=",extra="merge",fill="right") %>%

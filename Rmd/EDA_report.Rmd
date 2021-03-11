@@ -21,7 +21,8 @@ require_libraries(c("tidyverse",
                     "Hmisc",
                     "lme4",
                     "lmerTest",
-                    "kableExtra"
+                    "kableExtra",
+                    "ggstance"
                     ),
                   verb=FALSE)
 ```
@@ -65,6 +66,7 @@ enroll %<>%
 var_tbl1<-tibble(var_nm=as.character(),
                  var_type=as.character())
 var_tbl1 %<>% 
+  add_row(var_nm="Age_at_Enr",var_type="num") %>%
   add_row(var_nm="Sex",var_type="cat") %>%
   add_row(var_nm="HT",var_type="num") %>%
   add_row(var_nm="Wheelchair",var_type="cat") %>%
@@ -83,8 +85,8 @@ tbl1<-univar_analysis_mixed(id=enroll$Research_ID,
 
 tbl1 %>%
   kbl(caption="Table 1 - Demographic and Clinical Characteristic Comparison") %>%
-  collapse_rows(columns = 5, valign = "top")
-
+  collapse_rows(columns = c(1,5), valign = "top") %>%
+  kable_material(c("striped", "hover"))
 ```
 
 No significant differences were observed between the L and S group.  
@@ -99,10 +101,10 @@ ws2_case_n<-length(unique(walkspeed$Research_ID[walkspeed$Repeat_Meas_n>1&walksp
 ws2_ctrl_n<-length(unique(walkspeed$Research_ID[walkspeed$Repeat_Meas_n>1&walkspeed$Summary_Type=="Standard"]))
 ```
 
-The 10-ft walking speed is measured every 6 months, 2 measurement were taken each time, and the average value is used for final analysis. `r ws_pat_n` subjects has at least some walking speed records, while only `r ws2_pat_n` had more than 2 repeated measures, `r ws2_case_n` from L group and `r ws2_ctrl_n` from S group.
+The 10-ft walking speed is measured every 6 months, 2 measurement were taken each time, and the average value is used for final analysis. `r ws_pat_n` subjects has at least some walking speed records, while only `r ws2_pat_n` had more than 1 repeated measures, `r ws2_case_n` from L group and `r ws2_ctrl_n` from S group.
 
 
-```{r ws_lmm}
+```{r ws_exp}
 ggplot(walkspeed %>%
          filter(Repeat_Meas_n > 1) %>%
          select(Research_ID,ws_10ft,Mth3_Since_Last,Summary_Type),
@@ -111,14 +113,83 @@ ggplot(walkspeed %>%
   geom_smooth(aes(group=Research_ID),
               method="lm",formula = 'y~x',se=FALSE,linetype=1)
 
+#collect personalized rates of change
+walkspeed_summ<-walkspeed %>%
+  filter(Repeat_Meas_n > 1) %>%
+  select(Research_ID,ws_10ft,Mth_Since_Last) %>%
+  nest(data=-Research_ID) %>%
+  mutate(
+    ws_lm=map(data,~lm(ws_10ft~Mth_Since_Last,data=.x)),
+    ws_lm_tidied=map(ws_lm,tidy)
+  ) %>%
+  unnest(ws_lm_tidied) %>%
+  select(-data,-ws_lm) %>%
+  filter(term=="Mth_Since_Last") %>%
+  select(Research_ID,estimate,p.value) %>%
+  mutate(p.value=case_when(p.value==NaN ~ 0,
+                           TRUE ~ p.value)) %>%
+  mutate(change_dir=case_when(p.value > 0.05 ~ 'No Change',
+                              estimate/abs(estimate)< 0 ~ 'Decrease',
+                              TRUE ~ 'Increase'),
+         estimate=round(estimate,3)) %>%
+  left_join(enroll %>%
+              select(Research_ID,Summary_Type),
+            by="Research_ID")
+
+
+ggplot(walkspeed_summ, aes(x = estimate, y = 1)) +
+  # horizontal box plot
+  geom_boxploth(aes(fill = Summary_Type)) +
+  # normal density plot
+  geom_density(aes(x = estimate,y=..scaled..), inherit.aes = FALSE) +
+  # vertical lines at Q1 / Q2 / Q3
+  stat_boxploth(geom = "vline", aes(xintercept = ..xlower..),linetype=2) +
+  stat_boxploth(geom = "vline", aes(xintercept = ..xmiddle..),linetype=2) +
+  stat_boxploth(geom = "vline", aes(xintercept = ..xupper..),linetype=2) +
+  # annotate boxplots
+  stat_summaryh(geom="text", fun.x=quantile,
+                aes(label=sprintf("%1.1f", ..x..)),
+                position=position_nudge(y=0.2),
+                size=3.5,angle=90) +
+  
+  facet_grid(Summary_Type ~ ., scales="free") +
+  labs(x="Rate of Walking Speed change per Month", 
+       y="density")
+```
+
+Based on the estimated personal rate of changes, we can group the patients into the following three categories: 
+1. "No Change": when estimated slope is _not statistically significantly different_ from 0 (p.value > 0.05)
+2. "Increase": when estimated slope is _statistically significantly greater than_ 0 (p.value <= 0.05)
+3. "Decrease": when estimated slope is _statistically significantly less than_ 0 (p.value <= 0.05)
+
+```{r}
+tbl2<-univar_analysis_mixed(id=walkspeed_summ$Research_ID,
+                            grp=walkspeed_summ$Summary_Type,
+                            X=walkspeed_summ[,c("estimate","change_dir")],
+                            data_type=c("num","cat"),
+                            pretty=T,
+                            digit=3)
+
+tbl2 %>%
+  kbl(caption="Table 2 - Walking Speed Change per Month") %>%
+  collapse_rows(columns = c(1,5), valign = "top") %>%
+  kable_material(c("striped","hover"))
+```
+
+From the boxplots and summary table above, we observe:
+- There are no significant difference of Walking Speed change over time between two groups, however, the walking speed change is numerically more stable among the "Linguistic" group;
+- The walking speed change is a lot more variable among the the "Standard" group;due to such variability difference, we observe more extremely worse cases in the control ("Standard") group
+
+
+We further build a mixed effect model to better account for the nested variability structure, but still observed no significant difference in walking speed change between the two comparison groups.
+
+```{r ws_lmm}
 fit_ws<-lmer(ws_10ft ~ Mth3_Since_Last*Summary_Type+(1+Mth3_Since_Last|Research_ID),
              data=walkspeed %>% filter(Repeat_Meas_n > 1))
 summary(fit_ws)
 confint(fit_ws)
 anova(fit_ws)
 ```
-
-No significant difference in walking speed change between the two comparison groups.
 
 
 ### Grip Strength
@@ -146,6 +217,97 @@ ggplot(grip %>%
   facet_wrap(~grip_side,ncol=2,scales="free")
 ```
 
+
+```{r grip_grp}
+#collect personalized rates of change
+grip_summ<-grip %>%
+  filter(Repeat_Meas_n > 1) %>%
+  select(Research_ID,grip_right,grip_left,Mth_Since_Last) %>%
+  gather(grip_side,grip,-Research_ID,-Mth_Since_Last) %>%
+  filter(!is.na(grip)) %>% #not always observed for both hands
+  nest(data=c(grip,Mth_Since_Last)) %>%
+  mutate(
+    grip_lm=map(data, ~lm(grip ~ Mth_Since_Last,data=.x)),
+    grip_lm_tidied=map(grip_lm,tidy)
+  ) %>%
+  unnest(grip_lm_tidied) %>%
+  select(-data,-grip_lm) %>%
+  filter(term=="Mth_Since_Last") %>%
+  select(Research_ID,grip_side,estimate,p.value) %>%
+  mutate(p.value=case_when(p.value==NaN ~ 0,
+                           TRUE ~ p.value)) %>%
+  mutate(change_dir=case_when(p.value > 0.05 ~ 'No Change',
+                              estimate/abs(estimate)< 0 ~ 'Decrease',
+                              TRUE ~ 'Increase'),
+         estimate=round(estimate,3)) %>%
+  left_join(enroll %>%
+              select(Research_ID,Summary_Type),
+            by="Research_ID")
+
+
+ggplot(grip_summ, aes(x = estimate, y = 1)) +
+  # horizontal box plot
+  geom_boxploth(aes(fill = Summary_Type)) +
+  # normal density plot
+  geom_density(aes(x = estimate,y=..scaled..), inherit.aes = FALSE) +
+  # vertical lines at Q1 / Q2 / Q3
+  stat_boxploth(geom = "vline", aes(xintercept = ..xlower..),linetype=2) +
+  stat_boxploth(geom = "vline", aes(xintercept = ..xmiddle..),linetype=2) +
+  stat_boxploth(geom = "vline", aes(xintercept = ..xupper..),linetype=2) +
+  # annotate boxplots
+  stat_summaryh(geom="text", fun.x=quantile,
+                aes(label=sprintf("%1.1f", ..x..)),
+                position=position_nudge(y=0.2),
+                size=3.5,angle=90) +
+  facet_grid(grip_side + Summary_Type ~ ., scales="free") +
+  labs(x="Grip Strength change per Month", 
+       y="density")
+```
+```{r}
+grip_summ_r<-grip_summ %>% filter()
+tbl3<-univar_analysis_mixed(id=grip_summ$Research_ID,
+                            grp=grip_summ$summ_grip,
+                            X=walkspeed_summ[,c("estimate","change_dir")],
+                            data_type=c("num","cat"),
+                            pretty=T,
+                            digit=3)
+
+tbl3 %>%
+  kbl(caption="Table 3 - Right Grip Change per Month") %>%
+  collapse_rows(columns = c(1,5), valign = "top") %>%
+  kable_material(c("striped","hover"))
+
+
+
+```
+
+
+**Right Grip**
+
+```{r}
+#
+table(grip_summ$change_dir,
+      grip_summ$Summary_Type)
+
+prop.table(table(walkspeed_summ$change_dir,
+           walkspeed_summ$Summary_Type),margin=2)
+
+chisq.test(walkspeed_summ$Summary_Type,
+           walkspeed_summ$change_dir)
+
+```
+
+
+```{r gripr_lmm}
+fit_gripr<-lmer(grip_right ~ Mth3_Since_Last*Summary_Type+(1|Research_ID),
+                data=grip %>% filter(Repeat_Meas_n > 1))
+summary(fit_gripr)
+anova(fit_gripr)
+confint(fit_gripr)
+
+```
+
+
 **Left Grip**
 ```{r gripl_lmm}
 fit_gripl<-lmer(grip_left ~ Mth3_Since_Last*Summary_Type+(1|Research_ID),
@@ -155,15 +317,21 @@ anova(fit_gripl)
 confint(fit_gripl)
 ```
 
-**Right Grip**
-```{r gripr_lmm}
-fit_gripr<-lmer(grip_right ~ Mth3_Since_Last*Summary_Type+(1|Research_ID),
-                data=grip %>% filter(Repeat_Meas_n > 1))
-summary(fit_gripr)
-anova(fit_gripr)
-confint(fit_gripr)
+```{r}
+#
+table(walkspeed_summ$change_dir,
+           walkspeed_summ$Summary_Type)
+
+prop.table(table(walkspeed_summ$change_dir,
+           walkspeed_summ$Summary_Type),margin=2)
+
+chisq.test(walkspeed_summ$Summary_Type,
+           walkspeed_summ$change_dir)
 
 ```
+
+
+
 
 
 ### GaitRite Measurement
