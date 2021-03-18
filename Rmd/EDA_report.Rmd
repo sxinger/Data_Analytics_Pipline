@@ -73,6 +73,7 @@ var_tbl1 %<>%
   add_row(var_nm="System_Installed",var_type="cat") %>%
   add_row(var_nm="Censored",var_type="num") %>%
   add_row(var_nm="Enroll_Days",var_type="num") %>%
+  add_row(var_nm="Site",var_type="cat") %>%
   bind_rows(data.frame(var_nm=c("ws_10ft","grip_right","grip_left",unique(gaitrite$var)),
                        var_type=rep("num",85),
                        stringsAsFactors = F))
@@ -107,7 +108,7 @@ ws2_ctrl_n<-length(unique(walkspeed$Research_ID[walkspeed$Repeat_Meas_n>1&walksp
 The 10-ft walking speed is measured every 6 months, 2 measurement were taken each time, and the average value is used for final analysis. `r ws_pat_n` subjects has at least some walking speed records, while only `r ws2_pat_n` had more than 1 repeated measures, `r ws2_case_n` from L group and `r ws2_ctrl_n` from S group.
 
 
-```{r ws_exp}
+```{r ws_exp1}
 ggplot(walkspeed %>%
          filter(Repeat_Meas_n > 1) %>%
          select(Research_ID,ws_10ft,Mth3_Since_Last,Summary_Type),
@@ -116,6 +117,9 @@ ggplot(walkspeed %>%
   geom_smooth(aes(group=Research_ID),
               method="lm",formula = 'y~x',se=FALSE,linetype=1)
 
+```
+
+```{r ws_exp2}
 #collect personalized rates of change
 walkspeed_summ<-walkspeed %>%
   filter(Repeat_Meas_n > 1) %>%
@@ -136,7 +140,7 @@ walkspeed_summ<-walkspeed %>%
                               TRUE ~ 'Increase'),
          estimate=round(estimate,3)) %>%
   left_join(enroll %>%
-              select(Research_ID,Summary_Type),
+              select(Research_ID,Summary_Type,Site),
             by="Research_ID")
 
 
@@ -156,6 +160,29 @@ ggplot(walkspeed_summ, aes(x = estimate, y = 1)) +
                 size=3.5,angle=90) +
   
   facet_grid(Summary_Type ~ ., scales="free") +
+  labs(x="Rate of Walking Speed change per Month", 
+       y="density")
+```
+
+
+```{r ws_exp2_site,fig.width=10}
+
+ggplot(walkspeed_summ, aes(x = estimate, y = 1)) +
+  # horizontal box plot
+  geom_boxploth(aes(fill = Summary_Type, linetype = Site)) +
+  # normal density plot
+  geom_density(aes(x = estimate,y=..scaled..), inherit.aes = FALSE) +
+  # vertical lines at Q1 / Q2 / Q3
+  stat_boxploth(geom = "vline", aes(xintercept = ..xlower..),linetype=2) +
+  stat_boxploth(geom = "vline", aes(xintercept = ..xmiddle..),linetype=2) +
+  stat_boxploth(geom = "vline", aes(xintercept = ..xupper..),linetype=2) +
+  # annotate boxplots
+  stat_summaryh(geom="text", fun.x=quantile,
+                aes(label=sprintf("%1.1f", ..x..)),
+                position=position_nudge(y=0.2),
+                size=3.5,angle=90) +
+  
+  facet_grid(Summary_Type + Site ~ ., scales="free") +
   labs(x="Rate of Walking Speed change per Month", 
        y="density")
 ```

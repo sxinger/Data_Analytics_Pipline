@@ -14,8 +14,10 @@ enroll<-read.xlsx("./data/enroll_roster_210129.xlsx",sheet = 1) %>%
   mutate(Enrolled=as.Date(date_convert(Enrolled),origin="1970-01-01"),
          Withdrawn=as.Date(date_convert(Withdrawn),origin="1970-01-01"),
          System.Installed=tolower(System.Installed)) %>%
-  select(Research.ID,Summary.Type,Last.Name,First.Name,Sex,Enrolled,Withdrawn,System.Installed) %>%
-  mutate(First.Name=gsub("\\s+.*","",First.Name))
+  select(Research.ID,Summary.Type,Last.Name,First.Name,Sex,Enrolled,Withdrawn,System.Installed,Site) %>%
+  mutate(First.Name=gsub("\\s+.*","",First.Name),
+         Site=case_when(grepl("(Tiger.*Place)",Site)~'TigerPlace',
+                        TRUE ~ 'Others'))
 
 #====Height====
 height<-read.xlsx("./data/Height_AmulatoryStatus_20Mar.xlsx",sheet = 1) %>%
@@ -31,7 +33,15 @@ enroll %<>%
 
 #===Add DOB===========
 #direct load from OneDrive (after sync)
-birth_date<-read_xlsx("C:\\Users\\xsm7f\\University of Missouri\\Marchal, Noah - NLM R01 Enrollment\\NLM R01 Participants_3.2021.xlsx") %>%
+onedrive_root<-file.path("/C:","Users",
+                         # "xsm7f", #user1
+                         "sxing" #user2
+                         )
+birth_date<-read_xlsx(file.path(onedrive_root,
+                                "University of Missouri",
+                                "Marchal, Noah - NLM_RO1_Project #2005938",
+                                "NLM R01 Enrollment",
+                                "NLM R01 Participants_3.2021.xlsx")) %>%
   select(`Research ID`,`DOB`)
 
 enroll %<>%
